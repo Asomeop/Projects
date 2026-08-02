@@ -1,6 +1,6 @@
 Software Projects Repository
 
-Welcome to my software projects repository. This space contains backend applications, AI services, and software engineering projects I am actively building.
+My name is Bryan Miller. Welcome to my software projects repository. This space contains backend applications, AI services, and software engineering projects I am actively building.
 
 Projects:
 document-rag-api
