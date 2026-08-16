@@ -1,72 +1,54 @@
-import os
-from typing import List
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
-from langchain_google_genai import ChatGoogleGenerativeAI
+import time
+from fastapi import FastAPI, HTTPException, status
+from schemas import ReviewRequest, ReviewApiResponse
+from reviewer import analyze_code
 
-# Load environment variables from .env file
-load_dotenv()
+# Initialize FastAPI application with clear metadata
+app = FastAPI(
+    title="AI Code Reviewer & Security Analysis API",
+    description="Microservice providing automated code quality and security reviews via LLMs.",
+    version="1.0.0",
+)
 
-class CodeIssue(BaseModel):
-    line_number: int = Field(
-        description="The line number where the issue occurs."
-    )
-    issue_type: str = Field(
-        description="Category of issue: 'Bug', 'Security', or 'Performance'."
-    )
-    description: str = Field(
-        description="Clear explanation of the problem."
-    )
-    suggested_fix: str = Field(
-        description="The corrected code snippet or detailed resolution."
-    )
 
-class CodeReviewResponse(BaseModel):
-    overall_score: int = Field(
-        description="Overall code quality score from 1 (terrible) to 100 (perfect)."
-    )
-    summary: str = Field(
-        description="A concise summary of the overall code quality."
-    )
-    issues: List[CodeIssue] = Field(
-        description="List of detected bugs, security flaws, or inefficiencies."
-    )
+@app.get("/health", status_code=status.HTTP_200_OK)
+def health_check():
+    """Simple health check endpoint for monitoring uptime."""
+    return {"status": "healthy"}
 
-# Initialize LLM and attach schema enforcement
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-structured_llm = llm.with_structured_output(CodeReviewResponse)
 
-def review_code(code_snippet: str, language: str = "python") -> CodeReviewResponse:
-    prompt = f"""
-    You are a Senior Security Analyst and Lead Software Engineer.
-    Analyze the following {language} code snippet for bugs, security vulnerabilities, and bad practices.
-
-    Code Snippet:
-    ```{language}
-    {code_snippet}
-    ```
+@app.post(
+    "/api/v1/review",
+    response_model=ReviewApiResponse,
+    status_code=status.HTTP_200_OK,
+)
+def review_code_endpoint(payload: ReviewRequest):
     """
-
-    # Invoke the model; it returns a CodeReviewResponse instance directly
-    return structured_llm.invoke(prompt)
-
-if __name__ == "__main__":
-    # Test script locally on a flawed code snippet
-    test_code = """
-    def get_user_data(user_id):
-        query = "SELECT * FROM users WHERE id = " + user_id
-        cursor.execute(query)
-        return cursor.fetchall()
+    Analyzes submitted code snippet for bugs, security vulnerabilities,
+    and performance issues, measuring total execution latency.
     """
+    try:
+        # 1. Start timer to track model latency
+        start_time = time.time()
 
-    print("Analyzing code snippet...")
-    review = review_code(test_code, "python")
+        # 2. Invoke Gemini analysis engine from reviewer.py
+        review_result = analyze_code(
+            code_snippet=payload.code,
+            language=payload.language,
+        )
 
-    print("\n[REVIEW OVERVIEW]")
-    print(f"Score: {review.overall_score}/100")
-    print(f"Summary: {review.summary}\n")
+        # 3. Calculate total elapsed time
+        elapsed_time = round(time.time() - start_time, 3)
 
-    print("[ISSUES FOUND]")
-    for issue in review.issues:
-        print(f"- [{issue.issue_type}] Line {issue.line_number}: {issue.description}")
-        print(f"  Fix: {issue.suggested_fix}\n")
+        # 4. Return structured envelope matching ReviewApiResponse schema
+        return ReviewApiResponse(
+            status="success",
+            execution_time_seconds=elapsed_time,
+            data=review_result,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error executing code review: {str(e)}",
+        )
