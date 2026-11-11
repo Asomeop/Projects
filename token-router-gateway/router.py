@@ -9,7 +9,7 @@ from schemas import TokenTelemetry
 load_dotenv()
 
 # Official Google GenAI client (picks up GEMINI_API_KEY from environment)
-client = genai.Client()
+client = genai.Client(http_options={'api_version': 'v1beta'})
 
 # Fast BPE tokenizer encoding
 tokenizer = tiktoken.get_encoding("cl100k_base")
