@@ -16,7 +16,7 @@ tokenizer = tiktoken.get_encoding("cl100k_base")
 
 # Pricing per million tokens (Tier 1: Flash vs. Tier 2: Frontier benchmark)
 PRICING = {
-    "gemini-2.5-flash": {
+    "gemini-3.8-flash": {
         "input_per_m": 0.15,
         "output_per_m": 0.60
     },
@@ -49,7 +49,7 @@ def classify_complexity(prompt: str, token_count: int) -> Tuple[str, str]:
         return "tier-2-frontier", "gemini-3.1-pro-preview"
     
     # Tier 1: Fast, highly cost-effective workhorse
-    return "tier-1-flash", "gemini-2.5-flash"
+    return "tier-1-flash", "gemini-3.8-flash"
 
 
 def dispatch_model(query: str, force_tier: str = None) -> Tuple[str, str, str, TokenTelemetry]:
@@ -63,7 +63,7 @@ def dispatch_model(query: str, force_tier: str = None) -> Tuple[str, str, str, T
     if force_tier == "tier-2-frontier":
         tier_name, model_name = "tier-2-frontier", "gemini-3.1-pro-preview"
     elif force_tier == "tier-1-flash":
-        tier_name, model_name = "tier-1-flash", "gemini-2.5-flash"
+        tier_name, model_name = "tier-1-flash", "gemini-3.8-flash"
     else:
         tier_name, model_name = classify_complexity(query, prompt_tokens)
 
@@ -80,7 +80,7 @@ def dispatch_model(query: str, force_tier: str = None) -> Tuple[str, str, str, T
     total_tokens = prompt_tokens + completion_tokens
 
     # 3. Calculate financial cost
-    pricing_tier = PRICING["gemini-2.5-flash"] if "flash" in model_name else PRICING["frontier-reasoning"]
+    pricing_tier = PRICING["gemini-3.8-flash"] if "flash" in model_name else PRICING["frontier-reasoning"]
     actual_cost = (
         (prompt_tokens / 1_000_000) * pricing_tier["input_per_m"]
         + (completion_tokens / 1_000_000) * pricing_tier["output_per_m"]

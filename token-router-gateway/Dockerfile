@@ -1,18 +1,20 @@
-# Base lightweight Python runtime
 FROM python:3.11-slim
 
-# Set working directory inside container
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Optimize build caching: copy and install dependencies first
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source code
-COPY schemas.py cache.py router.py main.py ./
+COPY . .
 
-# Expose FastAPI default port
 EXPOSE 8000
 
-# Start server
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

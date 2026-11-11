@@ -1,41 +1,45 @@
+import os
 import time
 from fastapi import FastAPI, HTTPException, status
+from fastapi.middleware.cors import CORSMiddleware
 from schemas import RouteRequest, RouteResponse, TokenTelemetry
 from cache import check_cache, store_in_cache
 from router import dispatch_model
 
-# Initialize the API gateway
 app = FastAPI(
     title="Adaptive Token Router & Semantic Gateway",
     description="Cost-aware proxy microservice that routes LLM requests dynamically and caches semantically identical queries.",
     version="1.0.0",
 )
 
+# Allowed origins: local dev environments and optional custom environment URL
+allowed_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+]
+
+env_frontend_url = os.getenv("FRONTEND_URL")
+if env_frontend_url:
+    allowed_origins.append(env_frontend_url)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins if env_frontend_url else ["*"],  # Fallback to wildcard until production domain is finalized
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health", status_code=status.HTTP_200_OK)
 def health_check():
-    """Uptime monitoring endpoint."""
     return {"status": "healthy", "service": "token-router-gateway"}
 
-
-@app.post(
-    "/api/v1/route",
-    response_model=RouteResponse,
-    status_code=status.HTTP_200_OK,
-)
+@app.post("/api/v1/route", response_model=RouteResponse, status_code=status.HTTP_200_OK)
 def route_prompt_endpoint(payload: RouteRequest):
-    """
-    Main gateway entrypoint:
-    1. Evaluates semantic cache (0-token response if hit).
-    2. Dynamically routes to Flash or Frontier tier on cache miss.
-    3. Stores fresh outputs in cache and returns structured telemetry.
-    """
     try:
         start_time = time.time()
-
-        # Step 1: Semantic Cache Check
         cache_hit, cached_text, matched_prompt = check_cache(payload.query)
-
         if cache_hit and cached_text:
             elapsed_ms = round((time.time() - start_time) * 1000, 2)
             return RouteResponse(
@@ -54,13 +58,11 @@ def route_prompt_endpoint(payload: RouteRequest):
                 ),
             )
 
-        # Step 2: Cache Miss -> Evaluate & Dispatch via Router
         response_text, tier_name, model_name, telemetry = dispatch_model(
             query=payload.query,
             force_tier=payload.force_tier,
         )
 
-        # Step 3: Index new response in semantic cache for future callers
         store_in_cache(
             query=payload.query,
             response_text=response_text,
@@ -75,7 +77,6 @@ def route_prompt_endpoint(payload: RouteRequest):
             response_text=response_text,
             telemetry=telemetry,
         )
-
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
